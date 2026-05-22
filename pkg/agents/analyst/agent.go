@@ -23,6 +23,10 @@ func New(cfg agent.Config) agent.Agent {
 		builtin.ListFilesTool(),
 		builtin.BashTool(),
 	}
+	if cfg.MemoryStore != nil {
+		specs = append(specs, builtin.MemorySearchTool(cfg.MemoryStore))
+		specs = append(specs, builtin.MemorySaveTool(cfg.MemoryStore))
+	}
 	return &analystAgent{BaseAgent: base, toolSpecs: specs}
 }
 

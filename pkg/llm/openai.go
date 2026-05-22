@@ -14,14 +14,19 @@ import (
 type OpenAIProvider struct {
 	apiKey  string
 	model   string
+	baseURL string
 	client  *http.Client
 }
 
-func NewOpenAI(apiKey, model string) *OpenAIProvider {
+func NewOpenAI(apiKey, model, baseURL string) *OpenAIProvider {
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
 	return &OpenAIProvider{
-		apiKey: apiKey,
-		model:  model,
-		client: &http.Client{},
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: baseURL,
+		client:  &http.Client{},
 	}
 }
 
@@ -158,7 +163,8 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []schema.Message, to
 		return schema.Message{}, fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(body))
+	chatURL := p.baseURL + "/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(body))
 	if err != nil {
 		return schema.Message{}, fmt.Errorf("creating request: %w", err)
 	}

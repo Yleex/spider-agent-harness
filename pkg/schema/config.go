@@ -4,6 +4,7 @@ type ProviderConfig struct {
 	Provider string  `yaml:"provider" json:"provider"`
 	Model    string  `yaml:"model" json:"model"`
 	APIKey   string  `yaml:"api_key" json:"-"`
+	APIBase  string  `yaml:"api_base" json:"api_base"`
 	Temp     float64 `yaml:"temperature" json:"temperature"`
 	MaxTokens int   `yaml:"max_tokens" json:"max_tokens"`
 }

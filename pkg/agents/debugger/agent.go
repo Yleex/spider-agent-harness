@@ -22,6 +22,10 @@ func New(cfg agent.Config) agent.Agent {
 		builtin.BashTool(),
 		builtin.ReadFileTool(),
 	}
+	if cfg.MemoryStore != nil {
+		specs = append(specs, builtin.MemorySearchTool(cfg.MemoryStore))
+		specs = append(specs, builtin.MemorySaveTool(cfg.MemoryStore))
+	}
 	return &debuggerAgent{BaseAgent: base, toolSpecs: specs}
 }
 
