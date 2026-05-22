@@ -1,57 +1,89 @@
 # AGENTS.md
 
-Spider — Agent Testing Harness. Go module `spider`, Go 1.22.
+Spider — Multi-model AI agent harness for software testing. Go module `spider`, Go 1.22.0.
 
 ## Build & test
 
-- Build: `go build -o spider ./cmd/spider`
-- Test all: `go test ./...`
-- Scope tests: `go test ./pkg/scope/`
+- `go build -o spider ./cmd/spider`
+- `go test ./...`
+- `make build` / `make test` / `make clean` / `make run`
+- `go mod tidy` before commits (goreleaser before hook)
+- `go build ./...` before commit
 
-## Architecture
+## CLI
 
 ```
-cmd/spider/main.go     → CLI entrypoint (subcommands: init, list, run, help)
-pkg/
-  agent/               → Agent interface + ReAct loop + registry
-  agents/{writer,runner,analyst,debugger,integrator}  → 5 testing specialists
-  orchestrator/        → Planner agent + worker pool + DAG plan for parallel sub-agents
-  llm/                 → Provider interface + registry + OpenAI/Anthropic implementations
-  tool/                → Tool system + builtin (bash, filesystem, memory_search)
-  scope/               → PathValidator — blocks writes outside project root
-  permission/          → Checker with allow/deny/ask rules
-  approval/            → Human-in-the-loop + double-confirm for external writes
-  memory/              → Compactor (LLM-summarizes old context) + FileStore (.md persistence) + SharedResultStore
-  config/              → Env-var loading
-  cli/                 → UI helpers (colors, prompts, help text)
-  schema/              → Shared types (Message, ToolCall, ProviderConfig)
-npm/                   → package.json + install.js for `npx spider-agent-harness`
-.goreleaser.yaml       → Cross-compile for linux/darwin/windows × amd64/arm64
+spider init              # interactive API key + provider setup
+spider list              # list available agents
+spider run <agent> "<t>" # run agent with task
+spider help              # detailed help
 ```
 
-## Key commands
+## Agent tool sets
 
-```sh
-spider init        # interactive API key + provider setup
-spider list        # list available agents
-spider run <a> "<t>"  # run agent with task
-spider help        # detailed help
+| Agent | Tools |
+|---|---|
+| writer | read_file, write_file, list_files [+ memory_search/save if MemoryStore set] |
+| runner | bash [+ memory_search if MemoryStore set] |
+| analyst | bash, read_file [+ memory_search if MemoryStore set] |
+| debugger | bash, read_file [+ memory_search if MemoryStore set] |
+| integrator | bash, read_file, list_files [+ memory_search if MemoryStore set] |
+| planner | read_file, list_files, bash, run_subtasks, get_results [+ memory_search if MemoryStore set] |
+
+Planner parallel pool: max 3 concurrent workers (hardcoded in `main.go`).
+
+## Plan format (planner agent)
+
+YAML-like key:value lines:
 ```
+id: gen-tests
+agent: writer
+task: generate tests for pkg/core
+depends: []
+strategy: concurrente
+```
+
+Strategies: `concurrente`/`parallel`, `secuencial`/`sequential`, `aislado` (default when no depends).
 
 ## Multi-model
 
 `SPIDER_PROVIDER` + `SPIDER_API_BASE` for any OpenAI-compatible endpoint (Ollama, Groq, etc.).
-Register new providers via `llm.RegisterProvider()`.
+Register new providers via `llm.RegisterProvider()` in `pkg/llm/registry.go` init().
+Defaults: temperature 0.7, max_tokens 4096.
 
-## Security (non-negotiable)
+## Security
 
-- Scope enforcer blocks all file access outside project root
-- bash/write_file default to `ask` permission
-- Double confirmation required for external writes
+- Scope enforcer (`pkg/scope/`) resolves symlinks, blocks writes outside project root
+- bash/write_file default to `ask` permission (`pkg/permission/`)
+- External writes require double confirmation (`pkg/approval/`)
+- Tool scope enforced via `PathArgs` field on Tool struct
 
-## Conventions
+## Memory
 
-- `go build ./...` before commit
-- Agent factories in `pkg/agents/<name>/agent.go`
-- New providers register in `pkg/llm/registry.go` init()
+- Auto-compaction triggers at 75% of `SPIDER_CONTEXT_LIMIT`
+- Token estimate = rune-length × 2
+- Persisted as `.md` files in `~/.spider/memory/` (or `SPIDER_MEMORY_DIR`)
+- `NO_COLOR` env var disables ANSI in CLI output
+
+## Environment
+
+| Variable | Default | Note |
+|---|---|---|
+| `SPIDER_PROVIDER` | `openai` | Provider name |
+| `SPIDER_MODEL` | `gpt-4o` | Model ID |
+| `SPIDER_API_BASE` | — | For OpenAI-compatible APIs |
+| `SPIDER_MAX_ITERATIONS` | `25` | Max ReAct steps |
+| `SPIDER_ALLOW_EXTERNAL` | `false` | Allow writes outside project |
+| `SPIDER_COMPACT_ENABLED` | `true` | Enable memory compaction |
+| `SPIDER_CONTEXT_LIMIT` | `128000` | Model context tokens |
+| `SPIDER_COMPACT_THRESHOLD` | `0.75` | Fraction triggering compaction |
+| `SPIDER_RESERVE_EXCHANGES` | `5` | Exchanges preserved after compaction |
+| `SPIDER_MEMORY_DIR` | `~/.spider/memory/` | Memory storage directory |
+| `OPENAI_API_KEY` | — | OpenAI API key |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key |
+
+## Adding agents
+
+- Agent factory in `pkg/agents/<name>/agent.go`
 - New tools in `pkg/tool/builtin/`
+- Register factory in two places in `cmd/spider/main.go`: `runAgent` registry block and `runPlanner` pool block

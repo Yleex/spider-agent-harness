@@ -1,166 +1,130 @@
 # Spider
 
-[🇬🇧 English](README.md) · [🇪🇸 Español](README.es.md)
-
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)]()
 
-**Spider** is a multi-model AI agent harness specialized for software testing. It runs a ReAct loop (Reason → Act → Observe) with LLM providers, tools, memory, and human-in-the-loop security — all from the command line.
+**Spider is your AI-powered testing team. Tell it what to test, and it writes, runs, and fixes tests automatically.**
+
+## What is Spider?
+
+- **Saves you hours** — instead of writing tests by hand, describe what you need in plain English and Spider does the work
+- **No AI expertise required** — works with ChatGPT, Claude, or free local models like Ollama. You only need an API key
+- **Keeps your project safe** — Spider asks for permission before running commands or changing files. Nothing happens without your approval
+
+## Quick start
+
+```sh
+# 1. One-time setup (you'll need an API key from OpenAI or Anthropic)
+npx spider-agent-harness init
+
+# 2. Ask Spider to write tests for your code
+npx spider-agent-harness run writer "generate tests for pkg/agent"
+
+# 3. See all available assistants
+npx spider-agent-harness list
+```
+
+## What can you do with it?
+
+### Your project has zero tests
+```sh
+spider run writer "generate tests for all files in pkg/"
+spider run runner "run the generated tests"
+```
+
+### A test is failing and you don't know why
+```sh
+spider run debugger "diagnose the failure in TestFoo"
+```
+
+### You need a quality report before a release
+```sh
+spider run analyst "analyze test coverage and detect flaky tests"
+```
+
+### You want everything automated from start to finish
+```sh
+spider run planner "generate tests for the entire project, run them, analyze coverage, and fix any failures"
+```
+
+### You need tests that use a database or external API
+```sh
+spider run integrator "set up postgres + redis, run integration tests"
+```
+
+## How it works
+
+1. **You describe a task in plain English** — Spider understands what you need
+2. **Spider plans and executes** — it reads your code, writes tests, runs them, and analyzes results
+3. **It works like a team of specialists** — each with a specific role (writer, runner, debugger, etc.)
+4. **You stay in control** — Spider asks before running commands or modifying files
+
+## The 6 assistants
+
+| Assistant | What it does |
+|---|---|
+| **writer** | Reads your code and writes tests for it |
+| **runner** | Runs your tests and tells you if they pass or fail |
+| **analyst** | Checks how much of your code is covered by tests |
+| **debugger** | Investigates why a test is failing and suggests how to fix it |
+| **integrator** | Sets up databases, APIs, and external services for testing |
+| **planner** | The team leader — breaks big tasks into smaller steps and coordinates the others |
 
 ## Installation
 
-### Option 1: npx (no install, binary auto-download)
+### Easiest: npx (no install required)
 
 ```sh
 npx spider-agent-harness run writer "generate tests for cmd/"
 ```
 
-> Requires Node.js 18+. The binary is downloaded automatically on first use.
+> Requires Node.js 18+. The binary downloads automatically on first use.
 
-### Option 2: Go install
+### Alternative: Go install
 
 ```sh
 go install github.com/Yleex/spider-agent-harness@latest
 ```
 
-> Requires Go 1.22+. The binary will be installed as `spider` in your `$GOPATH/bin`.
+> Requires Go 1.22+. Installs as `spider` in your `$GOPATH/bin`.
 
-### Option 3: Manual download
+### Alternative: Manual download
 
-Download the pre-built binary from [Releases](https://github.com/Yleex/spider-agent-harness/releases) for your OS/architecture.
+Download the pre-built binary from the [Releases page](https://github.com/Yleex/spider-agent-harness/releases) for your operating system.
 
-## Quick start
+## FAQ
 
-```sh
-# 1. Interactive setup (asks for API key and provider)
-spider init
+**Do I need an API key?** Yes. Run `spider init` to configure one (OpenAI or Anthropic).
 
-# 2. Run a testing agent
-spider run writer "generate unit tests for the package pkg/agent"
+**Can I use it offline?** Yes, with a local model like Ollama.
 
-# 3. See all available agents
-spider list
-```
+**Is it safe?** Yes. Spider can only access files inside your project folder. It asks for permission before running commands or writing files.
 
-## The 6 agents
+**Can it run tests in parallel?** Yes. The `planner` assistant automatically runs independent tasks at the same time to save time.
 
-| Agent | Responsibility | Key tools |
-|---|---|---|
-| `writer` | Generates test files from source code | `read_file`, `write_file`, `list_files` |
-| `runner` | Executes test suites and reports results | `bash` |
-| `analyst` | Measures coverage, detects flaky tests | `bash`, `read_file` |
-| `debugger` | Diagnoses failures and proposes fixes | `bash`, `read_file` |
-| `integrator` | Manages external services, fixtures, E2E | `bash`, `read_file`, `list_files` |
-| `planner` | Orchestrator — decomposes complex tasks into parallel sub-agents | `run_subtasks`, `get_results`, `memory_search` |
-
-Each agent has a specialized system prompt and scoped toolset. No overlap: one generates, another runs, another analyzes, etc.
-
-## Parallel execution
-
-The `planner` agent uses **goroutines** with a **worker pool** (max 3 concurrent) to run independent sub-tasks in parallel. It builds a DAG from the task, identifies independent branches, and executes them concurrently.
-
-### Memory strategies for sub-agents
-
-| Strategy | Description |
-|---|---|
-| **Isolated** | Each sub-agent runs in its own session. Used for fully independent branches. |
-| **Sequential** | Each sub-agent inherits the previous result. Used for pipelines (writer → runner → analyst). |
-| **Concurrent** | Sub-agents share a `SharedResultStore` for read-only access to each other's partial results. |
-
-### Example: full pipeline in a single command
-
-```sh
-spider run planner "ensure project quality before release"
-```
-
-The planner decomposes this into a parallel DAG:
-```
-writer("pkg/core") ──┐
-                      ├──  runner("all") ── analyst("coverage") ── debugger(if fails)
-writer("pkg/lib")  ──┘
-       ▲                          ▲                      ▲
-   concurrent                 sequential             conditional
-```
-
-## Use cases
-
-### "Add tests to a legacy project with zero coverage"
-```sh
-spider run writer "generate tests for all files in pkg/"
-spider run runner "execute the generated tests"
-```
-
-### "A test is failing and I don't know why"
-```sh
-spider run debugger "diagnose the failure in TestFoo"
-```
-
-### "Quality check before a release"
-```sh
-spider run analyst "analyze test coverage and detect flaky tests"
-```
-
-### "Full pipeline from test generation to quality report"
-```sh
-spider run planner "generate tests for the entire project, run them, analyze coverage, and fix any failures"
-```
-
-### "I need integration tests for a microservice"
-```sh
-spider run integrator "spin up postgres + redis, run contract tests"
-```
+**Can I add my own assistant?** Yes. If you're a developer, you can create custom assistants. See the development docs below.
 
 ## Multi-model support
 
-Supported out of the box:
+Spider works with any provider compatible with OpenAI's API format:
 
 - **OpenAI** — GPT-4o, GPT-4, GPT-3.5
 - **Anthropic** — Claude 3 Opus, Claude 3.5 Sonnet
-- **Any OpenAI-compatible API** — Ollama, Groq, Together AI, vLLM, etc.
+- **Ollama** (local) — `export SPIDER_API_BASE=http://localhost:11434/v1`
+- **Groq** — `export SPIDER_API_BASE=https://api.groq.com/openai/v1`
+- Any OpenAI-compatible endpoint
 
-### Examples
+Add custom providers by calling `llm.RegisterProvider()` in `pkg/llm/registry.go`.
 
-```sh
-# Ollama (local)
-export SPIDER_API_BASE=http://localhost:11434/v1
-export SPIDER_MODEL=llama3
+### Security
 
-# Groq
-export SPIDER_API_BASE=https://api.groq.com/openai/v1
-export SPIDER_MODEL=mixtral-8x7b-32768
+Three layers that cannot be disabled:
 
-# Custom provider (via code)
-import "spider/pkg/llm"
-llm.RegisterProvider("custom", func(cfg schema.ProviderConfig) llm.Provider {
-    // return your provider
-})
-```
-
-## Security (non-negotiable)
-
-Three mandatory layers:
-
-1. **Scope Enforcer** — No tool can read or write files outside the project directory. Symlinks, path traversal, and absolute paths are resolved and blocked.
-
+1. **Scope Enforcer** — No tool can read or write files outside the project directory. Symlinks and path traversal are resolved and blocked.
 2. **Permission Checker** — `bash` and `write_file` require explicit approval by default. Pattern-based rules (e.g., deny `rm -rf`) can be added.
+3. **Human-in-the-Loop** — Before executing a dangerous tool, the user is prompted. External writes require double confirmation.
 
-3. **Human-in-the-Loop** — Before executing a dangerous tool, the user is prompted. External writes require **double confirmation** with a diff preview.
-
-## Memory system
-
-Spider automatically compacts conversation history when it exceeds 75% of the model's context window. Summaries are persisted as `.md` files in `~/.spider/memory/` and are searchable by agents.
-
-```sh
-ls ~/.spider/memory/
-# index.json
-# 2026-05-22_writer_3f7a8b2c.md
-# 2026-05-22_runner_a1b2c3d4.md
-```
-
-Agents can query this memory using the `memory_search` tool to recall past sessions without re-consuming the full context.
-
-## Environment reference
+### Environment variables
 
 | Variable | Default | Description |
 |---|---|---|
@@ -169,13 +133,35 @@ Agents can query this memory using the `memory_search` tool to recall past sessi
 | `SPIDER_PROVIDER` | `openai` | Provider name |
 | `SPIDER_MODEL` | `gpt-4o` | Model ID |
 | `SPIDER_API_BASE` | — | Base URL (for OpenAI-compatible APIs) |
-| `SPIDER_MAX_ITERATIONS` | `25` | Max ReAct steps |
+| `SPIDER_MAX_ITERATIONS` | `25` | Max conversation steps |
 | `SPIDER_ALLOW_EXTERNAL` | `false` | Allow writes outside project |
-| `SPIDER_COMPACT_ENABLED` | `true` | Enable memory compaction |
-| `SPIDER_CONTEXT_LIMIT` | `128000` | Model context tokens |
 | `SPIDER_MEMORY_DIR` | `~/.spider/memory/` | Memory storage directory |
 
-## Development
+### Architecture
+
+```
+              LLM Provider (OpenAI / Anthropic / Ollama …)
+                      │
+            ┌─────────▼──────────┐
+            │  Planner Agent     │  breaks tasks into steps
+            │  (orchestrator)    │  and runs them in parallel
+            └──┬──────┬──────┬───┘
+               │             │
+       ┌───────▼──┐   ┌───────▼──┐
+       │  Writer  │   │  Runner  │  sub-agents running concurrently
+       └───────┬──┘   └───────┬──┘  (max 3 at a time)
+               └──────┬───────┘
+                      │
+              ┌───────▼───────┐
+              │    Analyst    │  runs after writer + runner
+              └───────┬───────┘
+                      │
+              ┌───────▼───────┐
+              │   Debugger    │  only if tests fail
+              └───────────────┘
+```
+
+### Development
 
 ```sh
 make build   # compile
@@ -186,49 +172,9 @@ make clean   # remove binary
 go build -o spider ./cmd/spider
 ```
 
-## Architecture quick reference
+### Memory system
 
-```
-            LLM Provider (OpenAI / Anthropic / Ollama …)
-                    │
-          ┌─────────▼──────────┐
-          │  Planner Agent     │  DAG decomposition + parallel dispatch
-          │  (orchestrator)    │
-          └──┬──────┬──────┬───┘
-             │    concurrent    │
-     ┌───────▼──┐ ┌───────▼──┐  │
-     │  Writer  │ │  Runner  │  │  sub-agents in goroutines
-     │  (pkg/a) │ │  (pkg/b) │  │  (max 3 concurrent)
-     └───────┬──┘ └───────┬──┘  │
-             └─────┬──────┘     │
-             sequential │       │
-             ┌─────────▼──────┐ │
-             │    Analyst     │ │
-             └─────────┬──────┘ │
-                       │        │
-             ┌─────────▼──────┐ │
-             │   Debugger     │─┘  conditional (only if failures)
-             └────────────────┘
-
-  Every agent runs the same ReAct core:
-  ┌──────┐    ┌─────────┐    ┌──────────┐
-  │ LLM  │───►│  Tools  │───►│  Memory  │
-  │ Chat │    │(scope + │    │(compactor│
-  │      │    │ perms)  │    │ + store) │
-  └──────┘    └─────────┘    └──────────┘
-```
-
-## FAQ
-
-**Do I need an API key?** Yes. Run `spider init` to configure one.
-
-**Can I use it offline?** Yes, with a local Ollama instance.
-
-**Can I add my own agent?** Yes. Create a factory in `pkg/agents/` and register it in `main.go` (or in the pool in `main.go:runPlanner` for parallel execution).
-
-**Can agents run in parallel?** Yes. The `planner` agent decomposes your task into a DAG, identifies independent branches, and runs them concurrently via goroutines with a configurable worker pool.
-
-**Is it CI/CD safe?** Yes, with `SPIDER_ALLOW_EXTERNAL=false`. For non-interactive environments, set `SPIDER_APPROVAL=allow` to skip human prompts.
+Spider automatically compacts conversation history when it exceeds 75% of the model's context window. Summaries are saved as `.md` files in `~/.spider/memory/` and can be searched by agents to recall past sessions.
 
 ## License
 
