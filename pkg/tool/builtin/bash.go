@@ -1,9 +1,9 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
 	"spider/pkg/tool"
@@ -35,13 +35,23 @@ func BashTool() tool.Tool {
 				cmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)
 			}
 
-			cmd.Stderr = os.Stderr
-			output, err := cmd.Output()
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+
+			err := cmd.Run()
+			outStr := stdout.String()
+			errStr := stderr.String()
+
 			if err != nil {
-				return nil, fmt.Errorf("ejecutando comando: %w\noutput: %s", err, string(output))
+				return nil, fmt.Errorf("ejecutando comando: %w\nstderr: %s\nstdout: %s", err, errStr, outStr)
 			}
 
-			return strings.TrimSpace(string(output)), nil
+			if errStr != "" {
+				outStr += "\nstderr:\n" + errStr
+			}
+
+			return strings.TrimSpace(outStr), nil
 		},
 	}
 }

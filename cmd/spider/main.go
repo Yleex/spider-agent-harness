@@ -102,6 +102,18 @@ func buildAgentCfg(name string, appCfg config.AppConfig, provider llm.Provider, 
 	}
 }
 
+type agentRegistrar interface {
+	Register(name string, factory func(agent.Config) agent.Agent)
+}
+
+func registerAgents(r agentRegistrar) {
+	r.Register("writer", func(c agent.Config) agent.Agent { return writer.New(c) })
+	r.Register("runner", func(c agent.Config) agent.Agent { return runner.New(c) })
+	r.Register("analyst", func(c agent.Config) agent.Agent { return analyst.New(c) })
+	r.Register("debugger", func(c agent.Config) agent.Agent { return debugger.New(c) })
+	r.Register("integrator", func(c agent.Config) agent.Agent { return integrator.New(c) })
+}
+
 func runAgent(appCfg config.AppConfig) {
 	if len(os.Args) < 4 {
 		cli.Warn("Uso: spider run <agente> \"<tarea>\"")
@@ -121,11 +133,7 @@ func runAgent(appCfg config.AppConfig) {
 	}
 
 	reg := agent.NewRegistry()
-	reg.Register("writer", func(c agent.Config) agent.Agent { return writer.New(c) })
-	reg.Register("runner", func(c agent.Config) agent.Agent { return runner.New(c) })
-	reg.Register("analyst", func(c agent.Config) agent.Agent { return analyst.New(c) })
-	reg.Register("debugger", func(c agent.Config) agent.Agent { return debugger.New(c) })
-	reg.Register("integrator", func(c agent.Config) agent.Agent { return integrator.New(c) })
+	registerAgents(reg)
 
 	agentCfg := buildAgentCfg(agentName, appCfg, provider, scopeVal, permCheck, appr, memStore)
 
@@ -154,11 +162,7 @@ func runPlanner(task string, appCfg config.AppConfig, provider llm.Provider, sco
 	baseCfg := buildAgentCfg("planner", appCfg, provider, scopeVal, permCheck, appr, memStore)
 	baseCfg.SharedStore = store
 
-	pool.Register("writer", func(c agent.Config) agent.Agent { return writer.New(c) })
-	pool.Register("runner", func(c agent.Config) agent.Agent { return runner.New(c) })
-	pool.Register("analyst", func(c agent.Config) agent.Agent { return analyst.New(c) })
-	pool.Register("debugger", func(c agent.Config) agent.Agent { return debugger.New(c) })
-	pool.Register("integrator", func(c agent.Config) agent.Agent { return integrator.New(c) })
+	registerAgents(pool)
 
 	planner := orchestrator.NewPlanner(baseCfg, pool, store)
 

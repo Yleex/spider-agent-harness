@@ -9,9 +9,8 @@ import (
 )
 
 type Pool struct {
-	sem     chan struct{}
-	agents  map[string]func(agent.Config) agent.Agent
-	results chan subtaskOutcome
+	sem    chan struct{}
+	agents map[string]func(agent.Config) agent.Agent
 }
 
 type subtaskOutcome struct {
@@ -22,9 +21,8 @@ type subtaskOutcome struct {
 
 func NewPool(maxConcurrent int) *Pool {
 	return &Pool{
-		sem:     make(chan struct{}, maxConcurrent),
-		agents:  make(map[string]func(agent.Config) agent.Agent),
-		results: make(chan subtaskOutcome, 100),
+		sem:    make(chan struct{}, maxConcurrent),
+		agents: make(map[string]func(agent.Config) agent.Agent),
 	}
 }
 
@@ -38,7 +36,7 @@ func (p *Pool) Run(ctx context.Context, baseCfg agent.Config, plan Plan, store *
 
 	prevResult := ""
 
-	for gIdx, group := range groups {
+	for _, group := range groups {
 		if len(group) == 0 {
 			continue
 		}
@@ -50,11 +48,12 @@ func (p *Pool) Run(ctx context.Context, baseCfg agent.Config, plan Plan, store *
 			wg.Add(1)
 			p.sem <- struct{}{}
 
+			prev := prevResult
 			go func(s Subtask, idx int) {
 				defer wg.Done()
 				defer func() { <-p.sem }()
 
-				out := p.runSubTask(ctx, baseCfg, s, store, prevResult)
+				out := p.runSubTask(ctx, baseCfg, s, store, prev)
 				groupResults[idx] = out
 
 				if store != nil {
@@ -76,10 +75,6 @@ func (p *Pool) Run(ctx context.Context, baseCfg agent.Config, plan Plan, store *
 			if r.Err == nil && r.Output != "" {
 				prevResult = r.Output
 			}
-		}
-
-		if gIdx < len(groups)-1 {
-			_ = gIdx
 		}
 	}
 
@@ -112,10 +107,4 @@ func (p *Pool) runSubTask(ctx context.Context, baseCfg agent.Config, sub Subtask
 	return subtaskOutcome{SubTask: sub, Output: out, Err: err}
 }
 
-func (p *Pool) ListAgents() []string {
-	var names []string
-	for n := range p.agents {
-		names = append(names, n)
-	}
-	return names
-}
+

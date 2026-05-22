@@ -1,10 +1,8 @@
 package approval
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -40,12 +38,10 @@ func (c *ConfirmApprover) ConfirmExternal(ctx context.Context, toolName string, 
 }
 
 func (c *ConfirmApprover) ask(msg string) (bool, error) {
-	fmt.Print(msg)
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
+	resp, err := promptFunc(msg)
 	if err != nil {
 		return false, err
 	}
-	resp := strings.TrimSpace(strings.ToLower(line))
+	resp = strings.TrimSpace(strings.ToLower(resp))
 	return resp == "y" || resp == "yes", nil
 }

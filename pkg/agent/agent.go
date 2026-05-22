@@ -36,10 +36,7 @@ type Config struct {
 }
 
 func (c Config) Clone() Config {
-	clone := c
-	if c.SharedStore != nil {
-	}
-	return clone
+	return c
 }
 
 type BaseAgent struct {

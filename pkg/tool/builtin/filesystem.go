@@ -1,11 +1,13 @@
 package builtin
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"spider/pkg/tool"
+	"strings"
 )
 
 func ReadFileTool() tool.Tool {
@@ -32,11 +34,42 @@ func ReadFileTool() tool.Tool {
 		PathArgs: []string{"path"},
 		Execute: func(ctx context.Context, args map[string]any) (any, error) {
 			path, _ := args["path"].(string)
-			data, err := os.ReadFile(path)
+			file, err := os.Open(path)
 			if err != nil {
 				return nil, fmt.Errorf("leyendo archivo: %w", err)
 			}
-			return string(data), nil
+			defer file.Close()
+
+			offset, _ := args["offset"].(float64)
+			limit, _ := args["limit"].(float64)
+
+			if offset <= 0 && limit <= 0 {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return nil, fmt.Errorf("leyendo archivo: %w", err)
+				}
+				return string(data), nil
+			}
+
+			var lines []string
+			scanner := bufio.NewScanner(file)
+			startLine := int(offset)
+			if startLine < 1 {
+				startLine = 1
+			}
+			maxLines := int(limit)
+
+			for lineNum := 1; scanner.Scan(); lineNum++ {
+				if lineNum < startLine {
+					continue
+				}
+				if maxLines > 0 && lineNum >= startLine+maxLines {
+					break
+				}
+				lines = append(lines, scanner.Text())
+			}
+
+			return strings.Join(lines, "\n"), nil
 		},
 	}
 }
