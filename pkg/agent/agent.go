@@ -21,16 +21,25 @@ type Agent interface {
 }
 
 type Config struct {
-	Name          string
-	SystemPrompt  string
-	Provider      llm.Provider
-	MaxIterations int
-	AllowExternal bool
-	ScopeVal      *scope.Validator
-	PermCheck     *permission.Checker
-	Approver      permission.Approver
-	CompactCfg    *memory.CompactConfig
-	MemoryStore   *memory.FileStore
+	Name            string
+	SystemPrompt    string
+	Provider        llm.Provider
+	MaxIterations   int
+	AllowExternal   bool
+	ScopeVal        *scope.Validator
+	PermCheck       *permission.Checker
+	Approver        permission.Approver
+	CompactCfg      *memory.CompactConfig
+	MemoryStore     *memory.FileStore
+	SharedStore     *memory.SharedResultStore
+	InjectedContext string
+}
+
+func (c Config) Clone() Config {
+	clone := c
+	if c.SharedStore != nil {
+	}
+	return clone
 }
 
 type BaseAgent struct {
@@ -68,6 +77,8 @@ func (a *BaseAgent) Name() string { return a.config.Name }
 
 func (a *BaseAgent) SystemPrompt() string { return a.config.SystemPrompt }
 
+func (a *BaseAgent) GetConfig() Config { return a.config }
+
 func (a *BaseAgent) Tools() []tool.Tool { return nil }
 
 func (a *BaseAgent) compactCheck(ctx context.Context) {
@@ -92,7 +103,17 @@ func (a *BaseAgent) compactCheck(ctx context.Context) {
 
 func (a *BaseAgent) Run(ctx context.Context, task string) (string, error) {
 	a.mem.Clear()
-	a.mem.Add(schema.NewTextMessage(schema.RoleSystem, a.config.SystemPrompt))
+
+	systemPrompt := a.config.SystemPrompt
+	if a.config.InjectedContext != "" {
+		systemPrompt += "\n\n[Contexto de tarea previa]\n" + a.config.InjectedContext + "\n[/Contexto]"
+	}
+	if a.config.SharedStore != nil && a.config.SharedStore.Len() > 0 {
+		shared := a.config.SharedStore.Format()
+		systemPrompt += "\n\n[Resultados de sub-agentes disponibles]\n" + shared + "\n[/Resultados]"
+	}
+
+	a.mem.Add(schema.NewTextMessage(schema.RoleSystem, systemPrompt))
 	a.mem.Add(schema.NewTextMessage(schema.RoleUser, task))
 
 	tools := a.Tools()

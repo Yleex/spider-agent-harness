@@ -17,6 +17,7 @@ import (
 	"spider/pkg/config"
 	"spider/pkg/llm"
 	"spider/pkg/memory"
+	"spider/pkg/orchestrator"
 	"spider/pkg/permission"
 	"spider/pkg/scope"
 )
@@ -52,25 +53,15 @@ func main() {
 	}
 }
 
-func runAgent(appCfg config.AppConfig) {
-	if len(os.Args) < 4 {
-		cli.Warn("Uso: spider run <agente> \"<tarea>\"")
-		cli.Info("Agentes: " + strings.Join(listAgentNames(), ", "))
-		cli.Info("Ejemplo: " + cli.Cyan("spider run writer \"genera tests para pkg/agent\""))
-		os.Exit(1)
-	}
-
-	agentName := os.Args[2]
-	task := os.Args[3]
-
+func buildInfra(appCfg config.AppConfig) (*scope.Validator, llm.Provider, *permission.Checker, permission.Approver, *memory.FileStore) {
 	projectRoot, err := config.ResolveProjectRoot()
 	if err != nil {
-		cli.Fatal(fmt.Sprintf("No se pudo determinar el directorio del proyecto: %v", err))
+		cli.Fatal("No se pudo determinar el directorio del proyecto: " + err.Error())
 	}
 
 	scopeVal, err := scope.New(projectRoot)
 	if err != nil {
-		cli.Fatal(fmt.Sprintf("Error de seguridad: %v", err))
+		cli.Fatal("Error de seguridad: " + err.Error())
 	}
 
 	provider, err := llm.GetProvider(appCfg.Agent.Provider)
@@ -88,21 +79,18 @@ func runAgent(appCfg config.AppConfig) {
 	if appCfg.MemoryDir != "" || appCfg.CompactCfg != nil {
 		store, err := memory.NewFileStore(appCfg.MemoryDir)
 		if err != nil {
-			cli.Warn(fmt.Sprintf("No se pudo inicializar almacén de memoria: %v", err))
+			cli.Warn("No se pudo inicializar almacén de memoria: " + err.Error())
 		} else {
 			memStore = store
 		}
 	}
 
-	reg := agent.NewRegistry()
-	reg.Register("writer", func(c agent.Config) agent.Agent { return writer.New(c) })
-	reg.Register("runner", func(c agent.Config) agent.Agent { return runner.New(c) })
-	reg.Register("analyst", func(c agent.Config) agent.Agent { return analyst.New(c) })
-	reg.Register("debugger", func(c agent.Config) agent.Agent { return debugger.New(c) })
-	reg.Register("integrator", func(c agent.Config) agent.Agent { return integrator.New(c) })
+	return scopeVal, provider, permCheck, appr, memStore
+}
 
-	agentCfg := agent.Config{
-		Name:          agentName,
+func buildAgentCfg(name string, appCfg config.AppConfig, provider llm.Provider, scopeVal *scope.Validator, permCheck *permission.Checker, appr permission.Approver, memStore *memory.FileStore) agent.Config {
+	return agent.Config{
+		Name:          name,
 		Provider:      provider,
 		MaxIterations: appCfg.Agent.MaxIterations,
 		AllowExternal: appCfg.Agent.AllowExternal,
@@ -112,18 +100,46 @@ func runAgent(appCfg config.AppConfig) {
 		CompactCfg:    appCfg.CompactCfg,
 		MemoryStore:   memStore,
 	}
+}
+
+func runAgent(appCfg config.AppConfig) {
+	if len(os.Args) < 4 {
+		cli.Warn("Uso: spider run <agente> \"<tarea>\"")
+		cli.Info("Agentes: " + strings.Join(listAgentNames(), ", "))
+		cli.Info("Ejemplo: " + cli.Cyan("spider run writer \"genera tests para pkg/agent\""))
+		os.Exit(1)
+	}
+
+	agentName := os.Args[2]
+	task := os.Args[3]
+
+	scopeVal, provider, permCheck, appr, memStore := buildInfra(appCfg)
+
+	if agentName == "planner" {
+		runPlanner(task, appCfg, provider, scopeVal, permCheck, appr, memStore)
+		return
+	}
+
+	reg := agent.NewRegistry()
+	reg.Register("writer", func(c agent.Config) agent.Agent { return writer.New(c) })
+	reg.Register("runner", func(c agent.Config) agent.Agent { return runner.New(c) })
+	reg.Register("analyst", func(c agent.Config) agent.Agent { return analyst.New(c) })
+	reg.Register("debugger", func(c agent.Config) agent.Agent { return debugger.New(c) })
+	reg.Register("integrator", func(c agent.Config) agent.Agent { return integrator.New(c) })
+
+	agentCfg := buildAgentCfg(agentName, appCfg, provider, scopeVal, permCheck, appr, memStore)
 
 	a, err := reg.Create(agentName, agentCfg)
 	if err != nil {
 		cli.Fatal(err.Error())
 	}
 
-	cli.Info(fmt.Sprintf("Ejecutando agente %s...", cli.Bold(agentName)))
-	cli.Info(fmt.Sprintf("Tarea: %s", task))
+	cli.Info("Ejecutando agente " + cli.Bold(agentName) + "...")
+	cli.Info("Tarea: " + task)
 
 	result, err := a.Run(context.Background(), task)
 	if err != nil {
-		cli.Fatal(fmt.Sprintf("Error: %v", err))
+		cli.Fatal("Error: " + err.Error())
 	}
 
 	cli.Done("Agente completado")
@@ -131,6 +147,34 @@ func runAgent(appCfg config.AppConfig) {
 	fmt.Println(result)
 }
 
+func runPlanner(task string, appCfg config.AppConfig, provider llm.Provider, scopeVal *scope.Validator, permCheck *permission.Checker, appr permission.Approver, memStore *memory.FileStore) {
+	store := memory.NewSharedResultStore()
+	pool := orchestrator.NewPool(3)
+
+	baseCfg := buildAgentCfg("planner", appCfg, provider, scopeVal, permCheck, appr, memStore)
+	baseCfg.SharedStore = store
+
+	pool.Register("writer", func(c agent.Config) agent.Agent { return writer.New(c) })
+	pool.Register("runner", func(c agent.Config) agent.Agent { return runner.New(c) })
+	pool.Register("analyst", func(c agent.Config) agent.Agent { return analyst.New(c) })
+	pool.Register("debugger", func(c agent.Config) agent.Agent { return debugger.New(c) })
+	pool.Register("integrator", func(c agent.Config) agent.Agent { return integrator.New(c) })
+
+	planner := orchestrator.NewPlanner(baseCfg, pool, store)
+
+	cli.Info("Ejecutando agente " + cli.Bold("planner") + " (orquestador con paralelismo)...")
+	cli.Info("Tarea: " + task)
+
+	result, err := planner.Run(context.Background(), task)
+	if err != nil {
+		cli.Fatal("Error: " + err.Error())
+	}
+
+	cli.Done("Plan completado")
+	fmt.Println()
+	fmt.Println(result)
+}
+
 func listAgentNames() []string {
-	return []string{"writer", "runner", "analyst", "debugger", "integrator"}
+	return []string{"writer", "runner", "analyst", "debugger", "integrator", "planner"}
 }

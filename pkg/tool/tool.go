@@ -33,6 +33,8 @@ type ToolInstance struct {
 var ErrPermissionDenied = fmt.Errorf("permission denied")
 
 func (t *ToolInstance) Call(ctx context.Context, args map[string]any) (any, error) {
+	args = shallowCopy(args)
+
 	if err := t.enforceScope(args); err != nil {
 		return nil, err
 	}
@@ -57,6 +59,14 @@ func (t *ToolInstance) Call(ctx context.Context, args map[string]any) (any, erro
 	}
 
 	return t.Spec.Execute(ctx, args)
+}
+
+func shallowCopy(orig map[string]any) map[string]any {
+	cp := make(map[string]any, len(orig))
+	for k, v := range orig {
+		cp[k] = v
+	}
+	return cp
 }
 
 func (t *ToolInstance) enforceScope(args map[string]any) error {

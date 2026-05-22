@@ -114,6 +114,7 @@ func RunList() {
 		{"analyst", "Analiza cobertura, detecta flakyness y genera reportes de calidad"},
 		{"debugger", "Diagnostica test failures y propone correcciones"},
 		{"integrator", "Maneja servicios externos, fixtures y tests de integración/E2E"},
+		{"planner", "Orquestador: descompone tareas complejas y las ejecuta en paralelo vía sub-agentes"},
 	}
 
 	for _, a := range agents {
@@ -143,6 +144,15 @@ func RunHelp() {
     spider run analyst "analiza la cobertura de tests"
     spider run debugger "diagnostica por qué falla TestRun"
     spider run integrator "prepara servicios para test de integración"
+    spider run planner "asegura la calidad del proyecto antes del release"
+
+  Agente planner:
+
+    El agente planner descompone tareas complejas en subtareas independientes
+    y las ejecuta en paralelo usando goroutines. Soporta 3 estrategias:
+      • concurrente — subtareas independientes se ejecutan en paralelo
+      • secuencial — cada subtarea hereda el resultado de la anterior
+      • aislado — cada subtarea corre en su propia sesión sin compartir contexto
 
   Variables de entorno:
 

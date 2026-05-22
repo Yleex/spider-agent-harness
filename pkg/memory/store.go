@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 type FileStore struct {
+	mu   sync.Mutex
 	root string
 }
 
@@ -41,6 +43,9 @@ func NewFileStore(rootDir string) (*FileStore, error) {
 }
 
 func (s *FileStore) Save(entry *SummaryEntry, agentName string, tags []string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if entry == nil {
 		return "", nil
 	}
@@ -130,6 +135,8 @@ func (s *FileStore) writeIndex(idx memoryIndex) error {
 }
 
 func (s *FileStore) Search(query string, tags []string, maxResults int) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	idx := s.loadIndex()
 	if maxResults <= 0 {
 		maxResults = 5
