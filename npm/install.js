@@ -6,7 +6,7 @@ const path = require('path');
 const { platform, arch } = require('os');
 
 const VERSION = '0.1.0';
-const REPO = 'user/spider';
+const REPO = 'Yleex/spider-agent-harness';
 
 const binaryName = platform() === 'win32' ? 'spider.exe' : 'spider';
 const destDir = path.join(__dirname, 'bin');

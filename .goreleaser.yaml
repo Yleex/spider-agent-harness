@@ -38,6 +38,6 @@ changelog:
 
 release:
   github:
-    owner: user
-    name: spider
+    owner: Yleex
+    name: spider-agent-harness
   prerelease: auto

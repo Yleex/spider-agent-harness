@@ -21,12 +21,14 @@ npx spider-agent-harness run writer "generate tests for cmd/"
 ### Option 2: Go install
 
 ```sh
-go install github.com/user/spider@latest
+go install github.com/Yleex/spider-agent-harness@latest
 ```
+
+> Requires Go 1.22+. The binary will be installed as `spider` in your `$GOPATH/bin`.
 
 ### Option 3: Manual download
 
-Download the pre-built binary from [Releases](https://github.com/user/spider/releases) for your OS/architecture.
+Download the pre-built binary from [Releases](https://github.com/Yleex/spider-agent-harness/releases) for your OS/architecture.
 
 ## Quick start
 

@@ -18,7 +18,7 @@ child.on('error', (err) => {
     console.error('');
     console.error('  Spider binary not found.');
     console.error('  Run `npm install` in the spider-agent-harness package to download it.');
-    console.error('  Or install manually from https://github.com/user/spider/releases');
+    console.error('  Or install manually from https://github.com/Yleex/spider-agent-harness/releases');
     console.error('');
     process.exit(1);
   }
