@@ -1,0 +1,7 @@
+spider
+spider.exe
+*.test
+*.out
+.env
+vendor/
+dist/
