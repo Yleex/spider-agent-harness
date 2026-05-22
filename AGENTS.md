@@ -15,12 +15,13 @@ cmd/spider/main.go     → CLI entrypoint (subcommands: init, list, run, help)
 pkg/
   agent/               → Agent interface + ReAct loop + registry
   agents/{writer,runner,analyst,debugger,integrator}  → 5 testing specialists
+  orchestrator/        → Planner agent + worker pool + DAG plan for parallel sub-agents
   llm/                 → Provider interface + registry + OpenAI/Anthropic implementations
   tool/                → Tool system + builtin (bash, filesystem, memory_search)
   scope/               → PathValidator — blocks writes outside project root
   permission/          → Checker with allow/deny/ask rules
   approval/            → Human-in-the-loop + double-confirm for external writes
-  memory/              → Compactor (LLM-summarizes old context) + FileStore (.md persistence)
+  memory/              → Compactor (LLM-summarizes old context) + FileStore (.md persistence) + SharedResultStore
   config/              → Env-var loading
   cli/                 → UI helpers (colors, prompts, help text)
   schema/              → Shared types (Message, ToolCall, ProviderConfig)
