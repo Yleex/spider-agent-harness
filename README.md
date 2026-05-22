@@ -41,7 +41,7 @@ spider run writer "generate unit tests for the package pkg/agent"
 spider list
 ```
 
-## The 5 testing agents
+## The 6 agents
 
 | Agent | Responsibility | Key tools |
 |---|---|---|
@@ -50,8 +50,36 @@ spider list
 | `analyst` | Measures coverage, detects flaky tests | `bash`, `read_file` |
 | `debugger` | Diagnoses failures and proposes fixes | `bash`, `read_file` |
 | `integrator` | Manages external services, fixtures, E2E | `bash`, `read_file`, `list_files` |
+| `planner` | Orchestrator — decomposes complex tasks into parallel sub-agents | `run_subtasks`, `get_results`, `memory_search` |
 
 Each agent has a specialized system prompt and scoped toolset. No overlap: one generates, another runs, another analyzes, etc.
+
+## Parallel execution
+
+The `planner` agent uses **goroutines** with a **worker pool** (max 3 concurrent) to run independent sub-tasks in parallel. It builds a DAG from the task, identifies independent branches, and executes them concurrently.
+
+### Memory strategies for sub-agents
+
+| Strategy | Description |
+|---|---|
+| **Isolated** | Each sub-agent runs in its own session. Used for fully independent branches. |
+| **Sequential** | Each sub-agent inherits the previous result. Used for pipelines (writer → runner → analyst). |
+| **Concurrent** | Sub-agents share a `SharedResultStore` for read-only access to each other's partial results. |
+
+### Example: full pipeline in a single command
+
+```sh
+spider run planner "ensure project quality before release"
+```
+
+The planner decomposes this into a parallel DAG:
+```
+writer("pkg/core") ──┐
+                      ├──  runner("all") ── analyst("coverage") ── debugger(if fails)
+writer("pkg/lib")  ──┘
+       ▲                          ▲                      ▲
+   concurrent                 sequential             conditional
+```
 
 ## Use cases
 
@@ -69,6 +97,11 @@ spider run debugger "diagnose the failure in TestFoo"
 ### "Quality check before a release"
 ```sh
 spider run analyst "analyze test coverage and detect flaky tests"
+```
+
+### "Full pipeline from test generation to quality report"
+```sh
+spider run planner "generate tests for the entire project, run them, analyze coverage, and fix any failures"
 ```
 
 ### "I need integration tests for a microservice"
@@ -154,18 +187,33 @@ go build -o spider ./cmd/spider
 ## Architecture quick reference
 
 ```
-LLM Provider (OpenAI / Anthropic / Ollama …)
-       │
-  ┌────▼────┐
-  │  Agent  │  ReAct loop: think → act → observe
-  │ Runtime │
-  └────┬────┘
-       │
-  ┌────▼────┐    ┌──────────┐
-  │  Tools  │    │  Memory  │
-  │(scope + │    │(compactor│
-  │ perms)  │    │ + store) │
-  └─────────┘    └──────────┘
+            LLM Provider (OpenAI / Anthropic / Ollama …)
+                    │
+          ┌─────────▼──────────┐
+          │  Planner Agent     │  DAG decomposition + parallel dispatch
+          │  (orchestrator)    │
+          └──┬──────┬──────┬───┘
+             │    concurrent    │
+     ┌───────▼──┐ ┌───────▼──┐  │
+     │  Writer  │ │  Runner  │  │  sub-agents in goroutines
+     │  (pkg/a) │ │  (pkg/b) │  │  (max 3 concurrent)
+     └───────┬──┘ └───────┬──┘  │
+             └─────┬──────┘     │
+             sequential │       │
+             ┌─────────▼──────┐ │
+             │    Analyst     │ │
+             └─────────┬──────┘ │
+                       │        │
+             ┌─────────▼──────┐ │
+             │   Debugger     │─┘  conditional (only if failures)
+             └────────────────┘
+
+  Every agent runs the same ReAct core:
+  ┌──────┐    ┌─────────┐    ┌──────────┐
+  │ LLM  │───►│  Tools  │───►│  Memory  │
+  │ Chat │    │(scope + │    │(compactor│
+  │      │    │ perms)  │    │ + store) │
+  └──────┘    └─────────┘    └──────────┘
 ```
 
 ## FAQ
@@ -174,9 +222,11 @@ LLM Provider (OpenAI / Anthropic / Ollama …)
 
 **Can I use it offline?** Yes, with a local Ollama instance.
 
-**Can I add my own agent?** Yes. Create a factory in `pkg/agents/` and register it in `main.go`.
+**Can I add my own agent?** Yes. Create a factory in `pkg/agents/` and register it in `main.go` (or in the pool in `main.go:runPlanner` for parallel execution).
 
-**Is it CI/CD safe?** Yes, with `SPIDER_ALLOW_EXTERNAL=false`.
+**Can agents run in parallel?** Yes. The `planner` agent decomposes your task into a DAG, identifies independent branches, and runs them concurrently via goroutines with a configurable worker pool.
+
+**Is it CI/CD safe?** Yes, with `SPIDER_ALLOW_EXTERNAL=false`. For non-interactive environments, set `SPIDER_APPROVAL=allow` to skip human prompts.
 
 ## License
 
